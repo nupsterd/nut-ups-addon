@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  # Solo en PRs: un push nuevo a main no cancela el run del merge anterior.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-and-test:
+    # Runner fijo (no ubuntu-latest, que migra a Ubuntu 26 desde el 19-oct-2026).
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        # Mismo pin que pv-backend: setup-uv no publica tags de major desde v8.
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.5.11"
+          enable-cache: false
+
+      # La imagen del add-on (base HA Alpine 3.21) trae Python 3.12.
+      - name: Set up Python 3.12 + dependencias de desarrollo
+        run: |
+          uv python install 3.12
+          uv venv -p 3.12 .venv
+          uv pip install -p .venv -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: .venv/bin/ruff check .
+
+      - name: Ruff format check
+        run: .venv/bin/ruff format --check .
+
+      - name: Pytest
+        run: .venv/bin/python -m pytest -q

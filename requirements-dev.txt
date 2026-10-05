@@ -1,0 +1,5 @@
+# Dependencias de desarrollo y CI (la imagen del add-on solo instala python3 + py3-requests).
+pytest==8.4.2
+pyyaml==6.0.3
+requests==2.32.5
+ruff==0.16.9
