@@ -1,0 +1,17 @@
+[project]
+name = "nut-ups-addon"
+version = "0.1.0a0"
+description = "NUT UPS status/battery reporter add-on for Home Assistant (Porteria Virtual)"
+requires-python = ">=3.12"
+dependencies = ["requests>=2.28"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "BLE"]

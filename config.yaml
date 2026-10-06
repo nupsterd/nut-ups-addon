@@ -1,0 +1,59 @@
+name: "NUT UPS (Portería Virtual)"
+version: "0.1.0-alpha"
+slug: nut_ups
+description: >
+  Lee el estado y la batería de una UPS desde el add-on NUT (upsd, LIST VAR),
+  reporta cada cambio de estado, muestras por minuto en batería y en la recarga,
+  y un latido cada 15 min con red. Audita en JSON Lines local y, si hay backend
+  configurado, reenvía con una cola persistente. Solo mensajero: los umbrales y
+  las alarmas los evalúa el backend.
+
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+
+startup: services
+boot: auto
+init: false
+# GET /host/info (dt_synchronized) para no fechar registros con el reloj sin NTP (D10).
+hassio_api: true
+
+options:
+  device_serial: ""
+  backend_url: ""
+  backend_secret: ""
+  backend_timeout_seconds: 5
+  nut_host: "a0d7b954-nut"
+  nut_port: 3493
+  ups_name: "epu1200"
+  poll_seconds: 5
+  float_voltage: 27.0
+  float_confirm_samples: 5
+  outbox_max_records: 100000
+  outbox_max_age_days: 30
+  audit_dir: "/config"
+  audit_retention_days: 30
+  log_level: "info"
+
+schema:
+  device_serial: str
+  backend_url: "str?"
+  backend_secret: "password?"
+  backend_timeout_seconds: int(1,30)
+  nut_host: str
+  nut_port: port
+  ups_name: "match(^[A-Za-z0-9_.-]+$)"
+  poll_seconds: int(1,60)
+  float_voltage: float(1,100)
+  float_confirm_samples: int(1,60)
+  outbox_max_records: int(1000,1000000)
+  outbox_max_age_days: int(1,90)
+  audit_dir: str
+  audit_retention_days: int(1,365)
+  log_level: list(debug|info|warning)
+
+map:
+  - addon_config:rw    # /config -> /addon_configs/<slug>/ (auditoría visible desde el add-on SSH)
