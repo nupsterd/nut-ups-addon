@@ -2,9 +2,14 @@
 
 Como mucho UN registro por lectura, con esta prioridad:
 
-1. ``status`` en cada cambio de ``ups.status`` (con ``previous_status``). La
+1. ``status`` cuando cambia el conjunto de banderas SIGNIFICATIVAS de
+   ``ups.status`` (``SIGNIFICANT_FLAGS``: OL, OB, LB, OFF, FSD), con
+   ``previous_status`` = ``ups.status`` crudo del último ``status`` EMITIDO. La
    primera lectura tras arrancar también es un ``status``, con
-   ``previous_status = null``.
+   ``previous_status = null``. Las demás banderas (CHRG, DISCHRG, TRIM, BOOST,
+   RB…) no disparan ``status`` (N4: en la EPU1200 CHRG/DISCHRG parpadean una
+   lectura, en OB y en OL); igual viajan en el ``ups_status`` crudo de cada
+   registro.
 2. ``sample`` cada ``SAMPLE_SECONDS`` (60 s) mientras la UPS esté en batería (``OB``).
 3. ``sample`` cada 60 s en la RECARGA: después de un episodio ``OB``, ya con
    red, hasta que ``battery.voltage >= float_voltage`` en
@@ -33,6 +38,9 @@ log = logging.getLogger("nut_ups.sampler")
 SAMPLE_SECONDS = 60
 HEARTBEAT_SECONDS = 15 * 60
 RECOVERY_MAX_SECONDS = 12 * 3600
+# Banderas de ups.status que disparan un registro status (N4). Se comparan como
+# conjunto de tokens, nunca por substring ("BOB" no es "OB").
+SIGNIFICANT_FLAGS = frozenset({"OL", "OB", "LB", "OFF", "FSD"})
 
 
 class Mode(enum.Enum):
@@ -56,17 +64,27 @@ class Sampler:
         self._heartbeat_s = heartbeat_seconds
         self._recovery_max_s = recovery_max_seconds
         self.mode = Mode.STABLE
+        # ups.status crudo del último status EMITIDO (el previous_status del siguiente).
         self.status: str | None = None
+        self._significant: frozenset[str] | None = None
+        self._last_seen: str | None = None
+        self.ignored_changes = 0
         self._last_emit: float | None = None
         self._recovery_start = 0.0
         self._float_streak = 0
 
     def observe(self, reading: Reading, mono: float) -> Observation | None:
-        if reading.status != self.status:
+        last_seen, self._last_seen = self._last_seen, reading.status
+        significant = reading.flags & SIGNIFICANT_FLAGS
+        if self.status is None or significant != self._significant:
             previous = self.status
             self.status = reading.status
+            self._significant = significant
             self._on_status_change(reading, mono, first=previous is None)
             return self._emit("status", reading, mono, previous)
+        if reading.status != last_seen:
+            self.ignored_changes += 1
+            log.debug("cambio de banderas no significativas: %s → %s", last_seen, reading.status)
 
         since = mono - (self._last_emit if self._last_emit is not None else mono)
         if self.mode is Mode.ON_BATTERY:
@@ -100,7 +118,7 @@ class Sampler:
             self._start_recovery(
                 mono, f"arranque con la batería en {reading.battery_voltage:.2f} V (< {self._float_voltage:.2f} V)"
             )
-        # Un cambio entre estados con red (p. ej. "OL CHRG" → "OL") no corta la recarga.
+        # Un cambio significativo entre estados con red (p. ej. "OL" → "OL LB") no corta la recarga.
 
     def _start_recovery(self, mono: float, why: str) -> None:
         self.mode = Mode.RECOVERY

@@ -14,7 +14,7 @@ from nut_ups.config import OPTIONS_PATH, Config
 from nut_ups.nut import NutClient
 from nut_ups.outbox import OUTBOX_PATH, Outbox, OutboxSender
 from nut_ups.runner import Runner
-from nut_ups.sampler import Sampler
+from nut_ups.sampler import SIGNIFICANT_FLAGS, Sampler
 
 log = logging.getLogger("nut_ups")
 
@@ -53,6 +53,7 @@ def startup(cfg: Config) -> None:
     log.info("NUT UPS (Portería Virtual) %s", ADDON_VERSION)
     for key, value in cfg.describe().items():
         log.info("  %s = %s", key, value)
+    log.info("Registro status solo si cambian las banderas %s (N4).", " ".join(sorted(SIGNIFICANT_FLAGS)))
     if not supervisor_token():
         log.error(
             "Sin SUPERVISOR_TOKEN: no se puede confirmar la hora de la Pi y los registros quedan "

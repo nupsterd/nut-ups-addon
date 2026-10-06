@@ -6,8 +6,9 @@ Un solo hilo hace todo salvo el envío al backend (``OutboxSender``, hilo aparte
 - Si upsd no responde (o responde ``ERR``): solo log, sin registros. El
   vigilante del backend detecta la falta de latidos. Reintento con backoff
   5/10/20/40/60 s que vuelve a 5 con la primera lectura buena.
-- Una línea INFO por hora resume lecturas, errores, registros por tipo, pendientes
-  de la cola y retenidos por hora no sincronizada.
+- Una línea INFO por hora resume lecturas, errores, registros por tipo, cambios de
+  banderas no significativas ignorados (N4), pendientes de la cola y retenidos por
+  hora no sincronizada.
 """
 
 from __future__ import annotations
@@ -175,16 +176,18 @@ class Runner:
         now = self._monotonic()
         if now < self._next_summary:
             return
+        self.counters["flags_ignored"] = self.sampler.ignored_changes
         d = self.counters - self._summary_base
         pending = self.outbox.pending_count() if self.outbox is not None else None
         log.info(
             "Resumen última hora: lecturas=%d errores_nut=%d status=%d sample=%d heartbeat=%d "
-            "retenidos_reloj=%d pendientes_cola=%s modo=%s",
+            "banderas_ignoradas=%d retenidos_reloj=%d pendientes_cola=%s modo=%s",
             d["polls"],
             d["nut_errors"],
             d["status"],
             d["sample"],
             d["heartbeat"],
+            d["flags_ignored"],
             self.gate.held_count,
             "n/a (fan-out apagado)" if pending is None else pending,
             self.sampler.mode.value,

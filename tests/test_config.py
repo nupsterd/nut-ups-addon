@@ -110,6 +110,13 @@ def test_arranque_sin_supervisor_token_avisa(monkeypatch, caplog, tmp_path):
     assert any("SUPERVISOR_TOKEN" in r.getMessage() for r in caplog.records)
 
 
+def test_arranque_informa_las_banderas_significativas(monkeypatch, caplog):
+    monkeypatch.setenv("SUPERVISOR_TOKEN", "x")
+    with caplog.at_level(logging.INFO):
+        startup(make_config())
+    assert "Registro status solo si cambian las banderas FSD LB OB OFF OL (N4)." in caplog.messages
+
+
 def test_secretos_nunca_en_el_log(tmp_path, caplog, monkeypatch):
     """backend_secret no aparece en ningún log (solo configurado/vacío)."""
     monkeypatch.setenv("SUPERVISOR_TOKEN", "x")

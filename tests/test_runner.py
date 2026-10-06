@@ -107,6 +107,35 @@ def test_corte_de_red_de_punta_a_punta(tmp_path, upsd_factory):
     runner.client.close()
 
 
+def test_parpadeo_de_chrg_no_emite_status_y_se_cuenta_en_el_resumen(tmp_path, upsd_factory, caplog):
+    # Secuencia medida el 6-oct (oficina): OB → OB CHRG → OB, una lectura cada uno.
+    ups = Ups()
+    srv = upsd_factory(ups.handler)
+    clock = FakeClock(utc(2026, 10, 6, 14, 50, 48))
+    runner = make_runner(tmp_path, srv.port, clock)
+    drive(runner, clock, 5)
+    ups.vars.update({"ups.status": "OB", "battery.voltage": "25.60", "input.voltage": "0"})
+    drive(runner, clock, 5)
+    ups.vars["ups.status"] = "OB CHRG"
+    with caplog.at_level(logging.INFO):
+        drive(runner, clock, 5)
+        ups.vars["ups.status"] = "OB"
+        drive(runner, clock, 50)  # la muestra del minuto (desde el status OB) lleva el crudo
+        drive(runner, clock, SUMMARY_INTERVAL)
+    recs = [json.loads(ln) for ln in audit_lines(tmp_path)]
+    assert [(r["kind"], r["ups_status"], r.get("previous_status", "-")) for r in recs[:3]] == [
+        ("status", "OL", None),
+        ("status", "OB", "OL"),
+        ("sample", "OB", "-"),
+    ]
+    assert recs[2]["device_ts"] == "2026-10-06T14:51:53.000+00:00"
+    assert [r for r in recs if r["kind"] == "status"] == recs[:2]
+    assert not [r for r in caplog.records if "Estado de la UPS" in r.getMessage()]
+    [resumen] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Resumen")]
+    assert "banderas_ignoradas=2" in resumen and "status=2" in resumen
+    runner.client.close()
+
+
 def test_upsd_caido_solo_log_con_backoff_y_sin_registros(tmp_path, upsd_factory, caplog):
     ups = Ups()
     srv = upsd_factory(ups.handler)
@@ -220,7 +249,7 @@ def test_resumen_horario(tmp_path, upsd_factory, caplog):
         drive(runner, clock, SUMMARY_INTERVAL + 5)
     [resumen] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Resumen")]
     assert "lecturas=721" in resumen
-    assert "status=1" in resumen and "heartbeat=4" in resumen
+    assert "status=1" in resumen and "heartbeat=4" in resumen and "banderas_ignoradas=0" in resumen
     assert "pendientes_cola=5" in resumen and "modo=stable" in resumen
     runner.client.close()
 

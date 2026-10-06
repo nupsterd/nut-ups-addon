@@ -9,7 +9,8 @@ Contrato (``POST <backend_url>``, header ``X-PV-UPS-Token``)::
     device_serial    str (opción de config)
     device_ts        ISO-8601 en UTC con milisegundos ("...T13:05:00.123+00:00")
     ups_status       str, ups.status crudo ("OL", "OB DISCHRG", "OB LB"...)
-    previous_status  str | null — SOLO en kind=status (null en el primero tras arrancar)
+    previous_status  str | null — SOLO en kind=status: ups_status del último status
+                     emitido (null en el primero tras arrancar)
     battery_voltage, battery_charge, input_voltage, input_frequency,
     ups_temperature  float | null
     addon_version    str
